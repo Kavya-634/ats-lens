@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Priya Raman - Resume</title>
+    <style>
+      @page {
+        size: Letter;
+        margin: 0.6in 0.75in;
+      }
+      body {
+        font-family: Georgia, 'Times New Roman', serif;
+        color: #1a1a1a;
+        font-size: 10pt;
+        line-height: 1.35;
+        margin: 0;
+      }
+      h1 {
+        font-size: 22pt;
+        margin: 0;
+        letter-spacing: 0.02em;
+      }
+      .contact {
+        margin: 4px 0 14px;
+        font-size: 9.5pt;
+        color: #333;
+      }
+      .contact span + span::before {
+        content: '  ·  ';
+        color: #999;
+      }
+      h2 {
+        font-family: Helvetica, Arial, sans-serif;
+        font-size: 9.5pt;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        border-bottom: 1px solid #888;
+        padding-bottom: 2px;
+        margin: 12px 0 5px;
+      }
+      .role {
+        display: flex;
+        justify-content: space-between;
+        font-weight: bold;
+        margin-top: 6px;
+      }
+      .org {
+        display: flex;
+        justify-content: space-between;
+        font-style: italic;
+        color: #333;
+      }
+      ul {
+        margin: 3px 0 0;
+        padding-left: 18px;
+      }
+      li {
+        margin: 1px 0;
+      }
+      .skills p {
+        margin: 2px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Priya Raman</h1>
+    <div class="contact">
+      <span>Seattle, WA</span>
+      <span>priya.raman@example.com</span>
+      <span>(206) 555-0142</span>
+      <span>linkedin.com/in/priyaraman</span>
+      <span>github.com/priyar</span>
+    </div>
+
+    <h2>Summary</h2>
+    <p>
+      Product-minded software engineer with 6 years of experience building data-heavy web
+      applications. Led the migration of a monolithic billing system to event-driven services,
+      cutting invoice latency by 70%. Comfortable owning features end to end, from discovery with
+      customers through rollout and on-call.
+    </p>
+
+    <h2>Experience</h2>
+    <div class="role"><span>Senior Software Engineer</span><span>Mar 2022 – Present</span></div>
+    <div class="org"><span>Northwind Analytics</span><span>Seattle, WA</span></div>
+    <ul>
+      <li>
+        Designed and shipped a usage-based billing pipeline (TypeScript, Kafka, Postgres) processing
+        40M events/day with exactly-once semantics.
+      </li>
+      <li>
+        Reduced p95 dashboard load time from 4.1s to 900ms by introducing server-side aggregation
+        and incremental caching.
+      </li>
+      <li>
+        Mentored four engineers; introduced lightweight design reviews that cut rework on large
+        features by roughly a third.
+      </li>
+    </ul>
+
+    <div class="role"><span>Software Engineer</span><span>Jul 2019 – Feb 2022</span></div>
+    <div class="org"><span>Brightline Health</span><span>Portland, OR</span></div>
+    <ul>
+      <li>
+        Built patient-intake forms used by 300+ clinics; drove accessibility work to WCAG 2.1 AA.
+      </li>
+      <li>
+        Owned the React component library and migrated it from JavaScript to TypeScript with zero
+        production regressions.
+      </li>
+      <li>
+        Set up CI with parallelised test shards, reducing average pipeline time from 28 to 9
+        minutes.
+      </li>
+    </ul>
+
+    <div class="role"><span>Software Engineering Intern</span><span>Summer 2018</span></div>
+    <div class="org"><span>Cascade Robotics</span><span>Bend, OR</span></div>
+    <ul>
+      <li>Wrote a Python tool to replay sensor logs for regression testing of navigation code.</li>
+    </ul>
+
+    <h2>Education</h2>
+    <div class="role"><span>B.S. Computer Science</span><span>2015 – 2019</span></div>
+    <div class="org"><span>Oregon State University</span><span>Corvallis, OR</span></div>
+    <ul>
+      <li>Minor in Statistics. Teaching assistant for Data Structures (two terms).</li>
+    </ul>
+
+    <h2>Skills</h2>
+    <div class="skills">
+      <p><strong>Languages:</strong> TypeScript, JavaScript, Python, SQL, Go (working knowledge)</p>
+      <p><strong>Frameworks:</strong> React, Node.js, Next.js, Express, FastAPI</p>
+      <p>
+        <strong>Infrastructure:</strong> PostgreSQL, Kafka, Redis, AWS (ECS, RDS, S3), Terraform,
+        GitHub Actions
+      </p>
+      <p>
+        <strong>Practices:</strong> Event-driven architecture, observability, accessibility,
+        technical mentoring
+      </p>
+    </div>
+
+    <h2>Projects</h2>
+    <div class="role"><span>Open-source: tiny-ledger</span><span>2023</span></div>
+    <ul>
+      <li>
+        A 1,200-line double-entry accounting library for Node with property-based tests; 900+ GitHub
+        stars.
+      </li>
+    </ul>
+
+    <h2>Certifications</h2>
+    <ul>
+      <li>AWS Certified Solutions Architect – Associate (2023)</li>
+    </ul>
+  </body>
+</html>
