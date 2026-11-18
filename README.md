@@ -4,7 +4,7 @@
 
 Upload a PDF or Word resume and ATS Lens shows two panels side by side: the resume as you see it, and the plain text an ATS actually extracts, with Contact, Summary, Experience, Education, Skills and other sections picked out as labelled blocks. It also tells you, kindly, when a file is a scan with no readable text, is password-protected, or is broken.
 
-**Live:** https://ats-lens.vercel.app
+**Live:** https://ats-lens-app.vercel.app
 
 Everything runs in your browser. There is no backend, no API key, no analytics, and no upload. Your resume never leaves your device.
 
