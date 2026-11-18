@@ -10,12 +10,12 @@ export default defineConfig({
   plugins: [
     react(),
     viteStaticCopy({
-      targets: [
-        { src: 'node_modules/pdfjs-dist/standard_fonts/*', dest: 'pdfjs/standard_fonts' },
-        { src: 'node_modules/pdfjs-dist/cmaps/*', dest: 'pdfjs/cmaps' },
-        { src: 'node_modules/pdfjs-dist/wasm/*', dest: 'pdfjs/wasm' },
-        { src: 'node_modules/pdfjs-dist/iccs/*', dest: 'pdfjs/iccs' },
-      ],
+      targets: ['standard_fonts', 'cmaps', 'wasm', 'iccs'].map((dir) => ({
+        src: `node_modules/pdfjs-dist/${dir}/*`,
+        dest: `pdfjs/${dir}`,
+        // v4 keeps the matched path by default; flatten to dist/pdfjs/<dir>/<file>.
+        rename: { stripBase: true },
+      })),
     }),
   ],
   test: {
