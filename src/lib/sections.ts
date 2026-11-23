@@ -1,4 +1,4 @@
-import type { ContactInfo, DetectedSection, SectionKind, Stats, Warning } from './types'
+import type { ContactInfo, DetectedSection, SectionKind, Stats } from './types'
 
 /**
  * Heading vocabulary. This mirrors what mainstream ATS parsers key on:
@@ -186,6 +186,65 @@ export function classifyHeading(line: string): SectionKind | null {
   return null
 }
 
+/**
+ * Words that are both a plausible heading and a plausible skill or list
+ * item. On their own they only count as a heading when the surrounding
+ * lines don't look like a list of similar short items.
+ */
+const AMBIGUOUS_HEADINGS = new Set([
+  'leadership',
+  'tools',
+  'strengths',
+  'community',
+  'research',
+  'training',
+  'languages',
+  'activities',
+  'technologies',
+  'expertise',
+  'competencies',
+  'overview',
+  'highlights',
+  'portfolio',
+  'talks',
+  'papers',
+  'courses',
+  'credentials',
+  'recognition',
+])
+
+function isShortListItem(line: string | undefined): boolean {
+  if (!line) return false
+  const t = line.trim()
+  return t.length > 0 && t.length <= 24 && !/[.:]$/.test(t) && !classifyHeading(t)
+}
+
+/**
+ * Heading classification with context: an ambiguous single word whose
+ * nearest non-blank neighbours are both short list items (a skills grid,
+ * a table flattened to one cell per line) is a list item, not a heading.
+ */
+export function classifyHeadingInContext(
+  line: string,
+  prev: string | undefined,
+  next: string | undefined,
+): SectionKind | null {
+  const kind = classifyHeading(line)
+  if (!kind) return null
+  const key = headingKey(line.trim())
+  if (!AMBIGUOUS_HEADINGS.has(key)) return kind
+  if (isShortListItem(prev) && isShortListItem(next)) return null
+  return kind
+}
+
+/** Nearest non-blank line in the given direction, if any. */
+function nearestText(lines: string[], from: number, step: 1 | -1): string | undefined {
+  for (let j = from + step; j >= 0 && j < lines.length; j += step) {
+    if (lines[j].trim()) return lines[j]
+  }
+  return undefined
+}
+
 const EMAIL_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi
 // Permissive international phone matcher: optional +country, then 2–5 groups
 // of digits separated by spaces, dots, dashes or parentheses. Digit-count
@@ -243,8 +302,9 @@ export function detectSections(text: string): DetectedSection[] {
   const sections: DetectedSection[] = []
   let current: DetectedSection = { kind: 'contact', heading: 'Header', lines: [] }
 
-  for (const line of lines) {
-    const kind = classifyHeading(line)
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    const kind = classifyHeadingInContext(line, nearestText(lines, i, -1), nearestText(lines, i, 1))
     if (kind) {
       if (current.lines.some((l) => l.trim())) sections.push(current)
       current = { kind, heading: line.trim(), lines: [] }
@@ -273,26 +333,4 @@ export function detectSections(text: string): DetectedSection[] {
     }
   }
   return sections
-}
-
-/** Heuristic: text that reads column-by-column often has many very short lines. */
-export function looksMultiColumn(text: string): boolean {
-  const lines = text.split('\n').filter((l) => l.trim())
-  if (lines.length < 30) return false
-  const short = lines.filter((l) => l.length <= 18).length
-  return short / lines.length > 0.55
-}
-
-export function buildWarnings(opts: {
-  sections: DetectedSection[]
-  contact: ContactInfo
-  text: string
-}): Warning[] {
-  const warnings: Warning[] = []
-  const labelled = opts.sections.filter((s) => s.kind !== 'contact' && s.kind !== 'other')
-  if (labelled.length === 0) warnings.push({ code: 'no-sections' })
-  if (!opts.contact.emails.length && !opts.contact.phones.length)
-    warnings.push({ code: 'no-contact' })
-  if (looksMultiColumn(opts.text)) warnings.push({ code: 'multi-column' })
-  return warnings
 }

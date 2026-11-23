@@ -1,7 +1,9 @@
 import {
   Code2,
+  Columns2,
   Eye,
   FileText,
+  Gauge,
   Layers,
   Moon,
   RotateCcw,
@@ -14,8 +16,10 @@ import { AtsPanel } from './components/AtsPanel'
 import { ErrorAlert, WarningAlert } from './components/Alerts'
 import { Dropzone } from './components/Dropzone'
 import { OriginalPanel } from './components/OriginalPanel'
+import { ScorePanel } from './components/ScorePanel'
 import { useTheme } from './hooks/useTheme'
 import { analyseFile, type AnalysisResult } from './lib/analyze'
+import type { Mode } from './lib/scoring'
 import { ParseError } from './lib/types'
 
 const REPO_URL = 'https://github.com/Kavya-634/ats-lens'
@@ -192,6 +196,22 @@ function Feature({ icon, title, body }: { icon: React.ReactNode; title: string; 
 
 function Results({ result, onReset }: { result: AnalysisResult; onReset: () => void }) {
   const { analysis, preview } = result
+  const [tab, setTab] = useState<'score' | 'compare'>('score')
+  const [mode, setMode] = useState<Mode>(() => {
+    try {
+      return localStorage.getItem('ats-lens-mode') === 'fresher' ? 'fresher' : 'experienced'
+    } catch {
+      return 'experienced'
+    }
+  })
+  const changeMode = (m: Mode) => {
+    setMode(m)
+    try {
+      localStorage.setItem('ats-lens-mode', m)
+    } catch {
+      /* ignore */
+    }
+  }
   return (
     <div className="container container--wide">
       <div className="results__bar">
@@ -209,6 +229,26 @@ function Results({ result, onReset }: { result: AnalysisResult; onReset: () => v
           </div>
         </div>
         <div className="results__actions">
+          <div className="panel__tabs results__tabs" role="tablist" aria-label="Results view">
+            <button
+              type="button"
+              role="tab"
+              className="panel__tab"
+              aria-selected={tab === 'score'}
+              onClick={() => setTab('score')}
+            >
+              <Gauge size={14} aria-hidden="true" /> Score
+            </button>
+            <button
+              type="button"
+              role="tab"
+              className="panel__tab"
+              aria-selected={tab === 'compare'}
+              onClick={() => setTab('compare')}
+            >
+              <Columns2 size={14} aria-hidden="true" /> Side by side
+            </button>
+          </div>
           <button type="button" className="btn btn--sm" onClick={onReset}>
             <RotateCcw size={15} />
             Check another resume
@@ -224,10 +264,14 @@ function Results({ result, onReset }: { result: AnalysisResult; onReset: () => v
         </div>
       ) : null}
 
-      <div className="panels">
-        <OriginalPanel preview={preview} fileName={analysis.fileName} />
-        <AtsPanel analysis={analysis} />
-      </div>
+      {tab === 'score' ? (
+        <ScorePanel analysis={analysis} mode={mode} onModeChange={changeMode} />
+      ) : (
+        <div className="panels">
+          <OriginalPanel preview={preview} fileName={analysis.fileName} />
+          <AtsPanel analysis={analysis} />
+        </div>
+      )}
     </div>
   )
 }

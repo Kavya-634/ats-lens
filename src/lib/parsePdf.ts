@@ -1,6 +1,6 @@
 import * as pdfjs from 'pdfjs-dist'
 import type { PDFDocumentProxy, TextItem } from 'pdfjs-dist/types/src/display/api'
-import { ParseError, type PageTextInfo } from './types'
+import { ParseError, type LayoutSignals, type PageTextInfo } from './types'
 
 // Bundle the worker with Vite so nothing is fetched from a CDN.
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
@@ -17,9 +17,13 @@ export interface PdfExtraction {
   text: string
   pages: PageTextInfo[]
   totalPages: number
+  layout: LayoutSignals
 }
 
-export async function openPdf(data: ArrayBuffer): Promise<PDFDocumentProxy> {
+export async function openPdf(
+  data: ArrayBuffer,
+  opts: { fontExtraProperties?: boolean } = {},
+): Promise<PDFDocumentProxy> {
   const task = pdfjs.getDocument({
     data: new Uint8Array(data),
     standardFontDataUrl: `${ASSET_BASE}standard_fonts/`,
@@ -29,6 +33,8 @@ export async function openPdf(data: ArrayBuffer): Promise<PDFDocumentProxy> {
     // Never try to reach the network for anything.
     disableAutoFetch: true,
     disableStream: true,
+    // Exposes font names on page.commonObjs so we can report them.
+    fontExtraProperties: opts.fontExtraProperties ?? false,
   })
   // Reject immediately on password prompts instead of waiting for input.
   task.onPassword = (_update: (p: string) => void, reason: number) => {
@@ -72,20 +78,39 @@ export async function extractPdfText(doc: PDFDocumentProxy): Promise<PdfExtracti
   const pageCount = Math.min(totalPages, MAX_PDF_PAGES)
   const pageTexts: string[] = []
   const pages: PageTextInfo[] = []
+  const fonts = new Set<string>()
+  const symbolFonts = new Set<string>()
+  let nonEmbeddedFonts = 0
+  let imageCount = 0
+  const pdfPages: NonNullable<LayoutSignals['pdfPages']> = []
 
   for (let i = 1; i <= pageCount; i++) {
     const page = await doc.getPage(i)
+    // Operator list first: it loads font objects and lets us count images.
+    const ops = await safeOperatorList(page)
+    imageCount += ops?.images ?? 0
     const content = await page.getTextContent()
     const lines: string[] = []
     let line = ''
     let lastY: number | null = null
     let lastX: number | null = null
+    const lineStarts: { x: number; y: number }[] = []
+    const seenFontIds = new Set<string>()
 
     for (const raw of content.items) {
       if (!('str' in raw)) continue
       const item = raw as TextItem
       const y = item.transform[5] as number
       const x = item.transform[4] as number
+      if (item.fontName && !seenFontIds.has(item.fontName)) {
+        seenFontIds.add(item.fontName)
+        const info = describeFont(page, item.fontName)
+        if (info) {
+          fonts.add(info.family)
+          if (info.symbolic) symbolFonts.add(info.family)
+          if (!info.embedded) nonEmbeddedFonts++
+        }
+      }
       if (lastY !== null && Math.abs(y - lastY) > 2) {
         lines.push(line)
         line = ''
@@ -100,6 +125,7 @@ export async function extractPdfText(doc: PDFDocumentProxy): Promise<PdfExtracti
         // (common when a PDF positions words individually).
         line += ' '
       }
+      if (!line && item.str.trim()) lineStarts.push({ x, y })
       line += item.str
       lastY = y
       lastX = x + item.width
@@ -113,18 +139,58 @@ export async function extractPdfText(doc: PDFDocumentProxy): Promise<PdfExtracti
     if (line) lines.push(line)
 
     const text = lines.join('\n')
-    const hasImages = await pageHasImages(page)
-    pages.push({ pageNumber: i, characters: text.replace(/\s/g, '').length, hasImages })
+    pages.push({
+      pageNumber: i,
+      characters: text.replace(/\s/g, '').length,
+      hasImages: (ops?.images ?? 0) > 0,
+    })
     pageTexts.push(text)
+    const vp = page.getViewport({ scale: 1 })
+    pdfPages.push({ width: vp.width, height: vp.height, lineStarts })
     page.cleanup()
   }
 
-  return { text: pageTexts.join('\n\n'), pages, totalPages }
+  // Bullet glyphs drawn as vector paths or via symbol fonts never reach the
+  // text layer, but the lines they introduce are still indented relative to
+  // the body margin. Count those so the format check doesn't mistake a
+  // bulleted PDF for prose.
+  const listLikeLines = countIndentedLines(pdfPages)
+
+  return {
+    text: pageTexts.join('\n\n'),
+    pages,
+    totalPages,
+    layout: {
+      source: 'pdf',
+      fonts: [...fonts],
+      symbolFonts: [...symbolFonts],
+      nonEmbeddedFonts,
+      imageCount,
+      listLikeLines,
+      pdfPages,
+    },
+  }
 }
 
-async function pageHasImages(
-  page: Awaited<ReturnType<PDFDocumentProxy['getPage']>>,
-): Promise<boolean> {
+function countIndentedLines(pages: NonNullable<LayoutSignals['pdfPages']>): number {
+  let n = 0
+  for (const p of pages) {
+    const xs = p.lineStarts.map((l) => Math.round(l.x))
+    if (xs.length < 4) continue
+    // The body margin is the most common line start on the left half of the page.
+    const freq = new Map<number, number>()
+    for (const x of xs) if (x < p.width / 2) freq.set(x, (freq.get(x) ?? 0) + 1)
+    const margin = [...freq.entries()].sort((a, b) => b[1] - a[1])[0]?.[0]
+    if (margin === undefined) continue
+    // Indented by 6–40pt from the margin: typical hanging indent of a list.
+    n += xs.filter((x) => x - margin >= 6 && x - margin <= 40).length
+  }
+  return n
+}
+
+type PdfPage = Awaited<ReturnType<PDFDocumentProxy['getPage']>>
+
+async function safeOperatorList(page: PdfPage): Promise<{ images: number } | null> {
   try {
     const ops = await page.getOperatorList()
     const imageOps = new Set<number>([
@@ -133,8 +199,51 @@ async function pageHasImages(
       pdfjs.OPS.paintImageXObjectRepeat,
       pdfjs.OPS.paintInlineImageXObjectGroup,
     ])
-    return ops.fnArray.some((fn: number) => imageOps.has(fn))
+    return { images: ops.fnArray.filter((fn: number) => imageOps.has(fn)).length }
   } catch {
-    return false
+    return null
+  }
+}
+
+const SYMBOLIC_FONT_RE =
+  /wingdings|webdings|symbol|dingbat|zapf|fontawesome|font-awesome|icomoon|material.?icons|glyphicons|segoe.?(mdl2|fluent).?icons|awesome/i
+
+interface FontInfo {
+  family: string
+  symbolic: boolean
+  embedded: boolean
+}
+
+/**
+ * Read a font's real name from pdf.js's shared object store. Subset prefixes
+ * ("ABCDEF+Georgia-Bold") and style suffixes are stripped so we can talk
+ * about families, which is what a reader actually perceives.
+ */
+function describeFont(page: PdfPage, id: string): FontInfo | null {
+  try {
+    if (!page.commonObjs.has(id)) return null
+    const font = page.commonObjs.get(id) as {
+      name?: string
+      fallbackName?: string
+      missingFile?: boolean
+      isType3Font?: boolean
+    } | null
+    if (!font) return null
+    const raw = font.name ?? font.fallbackName ?? id
+    const family = raw
+      .replace(/^[A-Z]{6}\+/, '')
+      .replace(
+        /[-,_ ]?(Bold|Italic|Oblique|Regular|Light|Medium|Semi[Bb]old|Black|Heavy|Thin|MT|PS|PSMT|Roman|Book|Demi)+$/g,
+        '',
+      )
+      .replace(/[-,_]+$/, '')
+      .trim()
+    return {
+      family: family || raw,
+      symbolic: SYMBOLIC_FONT_RE.test(raw) || Boolean(font.isType3Font),
+      embedded: !font.missingFile,
+    }
+  } catch {
+    return null
   }
 }

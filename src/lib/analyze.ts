@@ -1,11 +1,11 @@
+import { computeStats, detectSections, extractContact, normaliseText } from './sections'
 import {
-  buildWarnings,
-  computeStats,
-  detectSections,
-  extractContact,
-  normaliseText,
-} from './sections'
-import { ParseError, type Analysis, type OriginalPreview, type Warning } from './types'
+  ParseError,
+  type Analysis,
+  type LayoutSignals,
+  type OriginalPreview,
+  type Warning,
+} from './types'
 
 export const MAX_FILE_BYTES = 15 * 1024 * 1024
 
@@ -54,19 +54,15 @@ async function analysePdf(file: File, buffer: ArrayBuffer): Promise<AnalysisResu
   const { extractPdfText, openPdf, MAX_PDF_PAGES } = await import('./parsePdf')
   // pdf.js transfers the buffer to its worker; keep a copy for the preview.
   const previewData = buffer.slice(0)
-  const doc = await openPdf(buffer)
+  const doc = await openPdf(buffer, { fontExtraProperties: true })
   try {
-    const { text, pages, totalPages } = await extractPdfText(doc)
-    const analysis = buildAnalysis(file.name, 'pdf', text)
+    const { text, pages, totalPages, layout } = await extractPdfText(doc)
+    const analysis = buildAnalysis(file.name, 'pdf', text, layout)
     analysis.pages = pages
 
     const emptyPages = pages.filter((p) => p.characters < 20)
     if (emptyPages.length === pages.length) {
       analysis.warnings.unshift({ code: 'image-only', pages: pages.length })
-      // The "no sections / no contact" warnings are noise in this case.
-      analysis.warnings = analysis.warnings.filter(
-        (w) => w.code !== 'no-sections' && w.code !== 'no-contact',
-      )
     } else if (emptyPages.length > 0) {
       analysis.warnings.unshift({
         code: 'partial-text',
@@ -85,27 +81,34 @@ async function analysePdf(file: File, buffer: ArrayBuffer): Promise<AnalysisResu
 
 async function analyseDocx(file: File, buffer: ArrayBuffer): Promise<AnalysisResult> {
   const { extractDocx } = await import('./parseDocx')
-  const { text, html, messages } = await extractDocx(buffer)
-  const analysis = buildAnalysis(file.name, 'docx', text)
+  const { text, html, messages, layout } = await extractDocx(buffer)
+  const analysis = buildAnalysis(file.name, 'docx', text, layout)
   if (analysis.stats.words === 0) {
     analysis.warnings.unshift({ code: 'image-only', pages: 1 })
-    analysis.warnings = analysis.warnings.filter(
-      (w) => w.code !== 'no-sections' && w.code !== 'no-contact',
-    )
   }
   if (messages.length) analysis.warnings.push({ code: 'docx-messages', messages })
   return { analysis, preview: { kind: 'html', html } }
+}
+
+export const EMPTY_LAYOUT: LayoutSignals = {
+  source: 'pdf',
+  fonts: [],
+  symbolFonts: [],
+  nonEmbeddedFonts: 0,
+  imageCount: 0,
+  listLikeLines: 0,
 }
 
 export function buildAnalysis(
   fileName: string,
   fileType: 'pdf' | 'docx',
   rawText: string,
+  layout: LayoutSignals = { ...EMPTY_LAYOUT, source: fileType },
 ): Analysis {
   const text = normaliseText(rawText)
   const sections = detectSections(text)
   const contact = extractContact(text)
   const stats = computeStats(text)
-  const warnings: Warning[] = buildWarnings({ sections, contact, text })
-  return { fileName, fileType, rawText: text, sections, contact, stats, warnings }
+  const warnings: Warning[] = []
+  return { fileName, fileType, rawText: text, sections, contact, stats, warnings, layout }
 }

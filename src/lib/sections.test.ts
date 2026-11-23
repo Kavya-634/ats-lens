@@ -1,12 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildAnalysis } from './analyze'
-import {
-  classifyHeading,
-  detectSections,
-  extractContact,
-  looksMultiColumn,
-  normaliseText,
-} from './sections'
+import { classifyHeading, detectSections, extractContact, normaliseText } from './sections'
 
 describe('classifyHeading', () => {
   it('recognises common headings regardless of case and decoration', () => {
@@ -86,19 +80,27 @@ TypeScript, React`)
     const sections = detectSections(lines.join('\n'))
     expect(sections[0].kind).toBe('other')
   })
+
+  it('does not treat a skill in a flattened grid as a heading', () => {
+    const text = normaliseText(
+      'Skills\n\nCommunication\n\nTeamwork\n\nLeadership\n\nMS Office\n\nCanva\n\nEducation\nB.A. 2020',
+    )
+    const sections = detectSections(text)
+    expect(sections.map((s) => s.kind)).toEqual(['skills', 'education'])
+    expect(sections[0].lines.filter(Boolean)).toContain('Leadership')
+  })
+
+  it('still treats "Leadership" as a heading when it introduces a block', () => {
+    const text = normaliseText(
+      'Experience\nEngineer at Acme, 2020 – 2022\n\nLeadership\n• Led the robotics club to a national final.\n• Organised a 300-person hackathon.',
+    )
+    const sections = detectSections(text)
+    expect(sections.map((s) => s.kind)).toEqual(['experience', 'volunteering'])
+  })
 })
 
 describe('buildAnalysis', () => {
-  it('flags missing sections and contact', () => {
-    const a = buildAnalysis(
-      'x.pdf',
-      'pdf',
-      'Just a wall of prose with nothing an ATS could anchor to.',
-    )
-    expect(a.warnings.map((w) => w.code)).toEqual(['no-sections', 'no-contact'])
-  })
-
-  it('produces no warnings for a well-structured resume', () => {
+  it('builds sections, contact and stats for a well-structured resume', () => {
     const a = buildAnalysis(
       'ok.pdf',
       'pdf',
@@ -106,17 +108,8 @@ describe('buildAnalysis', () => {
     )
     expect(a.warnings).toEqual([])
     expect(a.stats.words).toBeGreaterThan(5)
-  })
-})
-
-describe('looksMultiColumn', () => {
-  it('detects many short lines', () => {
-    const cols = Array.from({ length: 60 }, (_, i) => (i % 2 ? 'React' : 'Node')).join('\n')
-    expect(looksMultiColumn(cols)).toBe(true)
-    const prose = Array.from(
-      { length: 40 },
-      () => 'This is a reasonably long line of prose text.',
-    ).join('\n')
-    expect(looksMultiColumn(prose)).toBe(false)
+    expect(a.sections.map((s) => s.kind)).toEqual(['contact', 'experience', 'education', 'skills'])
+    expect(a.contact.emails).toEqual(['jane@example.com'])
+    expect(a.layout.source).toBe('pdf')
   })
 })

@@ -158,40 +158,6 @@ export function WarningAlert({ warning }: { warning: Warning }) {
           </p>
         </Alert>
       )
-    case 'no-sections':
-      return (
-        <Alert
-          tone="warn"
-          icon={AlertTriangle}
-          title="No standard section headings were recognised"
-        >
-          <p>
-            ATS parsers look for familiar headings such as <em>Experience</em>, <em>Education</em>{' '}
-            and <em>Skills</em> to decide where each piece of information belongs. Without them,
-            your details may end up in the wrong fields or be dropped. Creative headings (e.g.
-            “Where I’ve made an impact”) are a common cause.
-          </p>
-        </Alert>
-      )
-    case 'no-contact':
-      return (
-        <Alert tone="warn" icon={AlertTriangle} title="No email address or phone number was found">
-          <p>
-            Contact details placed in headers, footers, text boxes or images are frequently
-            invisible to an ATS. Keep them in the main body near the top of the first page.
-          </p>
-        </Alert>
-      )
-    case 'multi-column':
-      return (
-        <Alert tone="info" icon={Info} title="This layout may read out of order">
-          <p>
-            The extracted text has many very short lines, which often means a multi-column or
-            table-based layout. Some ATS parsers read across columns and jumble the content. Compare
-            the two panels to see if the order still makes sense.
-          </p>
-        </Alert>
-      )
     case 'truncated':
       return (
         <Alert tone="info" icon={Info} title={`Showing the first ${warning.pagesShown} pages`}>
