@@ -2,11 +2,11 @@
 
 **See your resume the way an applicant tracking system does.**
 
-Upload a PDF or Word resume and ATS Lens gives you an **estimated ATS score out of 100** with a ranked Top 5 fixes, a nine-category breakdown, and issue cards that say what's wrong, why an ATS cares, how serious it is, and how to fix it in plain English. A second tab shows the resume as you see it next to the plain text an ATS actually extracts, with Contact, Summary, Experience, Education, Skills and other sections picked out as labelled blocks. It also tells you, kindly, when a file is a scan with no readable text, is password-protected, or is broken.
+Upload a PDF or Word resume and ATS Lens gives you an **estimated ATS score out of 100** with a ranked Top 5 fixes, a nine-category breakdown, and issue cards that say what's wrong, why an ATS cares, how serious it is, and how to fix it in plain English. Then **fix it right there, for free**: an editor shows the resume as clean sections, one-click fixes handle headings, bullets, dates, contact labels, spelling and more, the score updates live with a before/after comparison, and you download an ATS-friendly PDF or Word file. A third tab shows the resume as you see it next to the plain text an ATS actually extracts. It also tells you, kindly, when a file is a scan with no readable text, is password-protected, or is broken.
 
 **Live:** https://ats-lens-app.vercel.app
 
-Everything runs in your browser. There is no backend, no API key, no analytics, and no upload. Your resume never leaves your device.
+Parsing, scoring, fixing and exporting all run in your browser. There is no database, no analytics, and no upload. Your resume never leaves your device. The one optional exception is the **“Improve with AI”** button, which sends a single bullet (never the whole resume) to a same-origin serverless function; it only appears if the deployment owner has configured a key.
 
 ## Why
 
@@ -21,6 +21,12 @@ Most job applications are parsed by software before a human reads them. Resumes 
 - **Every issue is a card**: _What we found_ (with quotes from your resume), _Why an ATS cares_, a **High / Medium / Low** severity, and _How to fix it_.
 - **Fresher and Experienced modes.** Expectations differ: Fresher expects Education first, one page, a Projects section and fewer numbers; Experienced expects Experience first, up to two pages and more quantified results. Weights and thresholds change with the mode; the choice is remembered.
 - **No fake precision.** Heuristic checks (column detection from line positions, graphics, name detection, some date and bullet inferences) are labelled **“Possible issue”** and ranked below certain ones. Image-only files score 0 with every text-based category marked _Not assessed_ instead of showing hollow 100s. Resumes with no reachable contact or no recognised headings are capped (45 / 55) and told why.
+- **Fix & download tab.** The parsed resume becomes an editable document: name, labelled contact fields (Email, Phone, LinkedIn, Location, Other), and sections with a type picker, reorder/delete, and per-line bullet/paragraph toggle, add/remove, and undo. Anything the parser got wrong can be corrected by hand.
+- **One-click fixes** (deterministic, no AI): standardise headings (relabels “Where I've Worked” → Experience by heading words and content shape), clean bullets & symbols (icon-font junk, odd characters, letter-spaced headings, paragraphs that should be bullets), make dates consistent (every date → `Mon YYYY`, every range → en dash, “to Present”), label contact details (name on line 1, labelled contact line, missing items get `[add email]`-style placeholders), reorder sections for the chosen mode, add missing core sections with placeholder templates, remove personal details (DOB, marital status, nationality, religion, IDs), drop first person, fix spelling and doubled words, fix product-name casing, dedupe skills. Every issue card on the Score tab has a **Fix it** button that jumps to the editor.
+- **Weak verbs are flagged, never rewritten silently.** Each bullet that starts with “Responsible for”, “Worked on”, “Helped”, “Assisted”, “Involved in”… gets a list of stronger openers to pick from (Managed / Owned / Led / Delivered…). The rest of the sentence is kept.
+- **Live before/after score.** The header shows the original score, the current score of your edits, the delta, and a per-category before/after bar. The “after” score is computed on exactly the text the download will contain.
+- **Download as ATS-friendly PDF and Word.** Single column, Helvetica (PDF) / Calibri (DOCX), real text, real list bullets, no tables, text boxes, header/footer or images, US Letter with 0.75in margins, page numbers only when there is more than one page. Re-uploading the download into ATS Lens reproduces the editor's score exactly.
+- **Optional “Improve with AI”.** Rewrites one weak bullet into 2–3 options that start with a strong verb and make impact explicit. The model is instructed never to invent facts, numbers, tools or dates; anything it would need but doesn't have is written as `[add number]`, `[add %]`, `[add team size]`. The server and the client both reject any suggestion that contains a number not present in the original bullet. Suggestions are shown as choices, never applied automatically, and placeholders are highlighted in the editor and counted in a warning before download.
 - **Side-by-side view**: original on the left (PDF pages rendered with pdf.js, Word shown as HTML), extracted text on the right.
 - **Section detection**: headings are matched against the vocabulary common ATS parsers use (Experience, Work History, Education, Skills, Core Competencies, Projects, Certifications, Awards, Publications, Volunteering, Languages, Interests, References…). Each detected section is a colour-labelled block; the original heading text is shown alongside the label.
 - **Contact extraction**: emails, phone numbers and profile links are highlighted as chips.
@@ -58,7 +64,7 @@ This is an approximation. Every ATS vendor is different; the score is a prioriti
 
 ## Stack
 
-React 19 · Vite 8 · TypeScript · pdfjs-dist · mammoth · jszip · lucide-react · Vitest · deployed on Vercel.
+React 19 · Vite 8 · TypeScript · pdfjs-dist · mammoth · jszip · pdf-lib · docx · lucide-react · Vitest · deployed on Vercel (static + one optional serverless function).
 
 ## Development
 
@@ -82,13 +88,28 @@ npm run preview    # serve the production build
 
 ## Deploying
 
-The repo is set up for Vercel's Vite preset. `vercel.json` adds security headers (CSP, nosniff, frame-ancestors none) and long-lived caching for hashed assets and the self-hosted pdf.js resources. No environment variables are needed.
+The repo is set up for Vercel's Vite preset. `vercel.json` adds security headers (CSP, nosniff, frame-ancestors none) and long-lived caching for hashed assets and the self-hosted pdf.js resources. **No environment variables are needed**; everything except the AI button works without any.
+
+### Enabling the optional AI button
+
+The key lives only on the server, in Vercel's environment variables. It is never bundled into the browser.
+
+1. In Vercel: **Project → Settings → Environment Variables**. Add **one** of:
+   - `ANTHROPIC_API_KEY` (preferred; default model `claude-haiku-5-5`), or
+   - `OPENAI_API_KEY` (default model `gpt-5.4-mini`).
+   - Optional `AI_MODEL` to override the model id.
+2. Redeploy. The editor calls `GET /api/improve` on load; if it reports `available: true`, the **Improve with AI** button appears on experience/project bullets. If not, the button is simply absent and nothing else changes.
+
+For local development copy `.env.example` to `.env` and run with `vercel dev` (the Vite dev server alone does not run `api/`). `.env*` is gitignored.
+
+What the function does (`api/improve.ts`): accepts `POST { bullet, mode?, context?: { section?, role? } }` (bullet ≤ 600 chars), rate-limits to 30 requests per IP per 10 minutes, checks same-origin, calls the provider with a system prompt that forbids inventing facts, parses the JSON array reply, drops any suggestion whose digits don't all appear in the original, and returns `{ suggestions, provider }`. Nothing is logged or stored. Only the one bullet plus its section heading and role line are sent.
 
 ## Privacy
 
-- No server, no database, no third-party scripts, no fonts from CDNs.
+- No database, no third-party scripts, no fonts from CDNs. The only server code is the optional `/api/improve` function described above, and it is inert unless a key is configured.
 - Files are read with the browser `File` API into memory, parsed in a Web Worker (PDF) or on the main thread (DOCX), and discarded when you leave or click "Check another resume".
-- The only thing stored is your light/dark preference in `localStorage`.
+- Edits live in React state only; nothing is persisted. Downloads are generated in the browser with pdf-lib and docx.
+- The only things stored are your light/dark preference and Fresher/Experienced choice in `localStorage`.
 
 ## License
 

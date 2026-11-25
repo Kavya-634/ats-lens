@@ -6,6 +6,7 @@ import {
   Gauge,
   Layers,
   Moon,
+  PenLine,
   RotateCcw,
   ShieldCheck,
   Sun,
@@ -15,6 +16,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { AtsPanel } from './components/AtsPanel'
 import { ErrorAlert, WarningAlert } from './components/Alerts'
 import { Dropzone } from './components/Dropzone'
+import { Editor } from './components/Editor'
 import { OriginalPanel } from './components/OriginalPanel'
 import { ScorePanel } from './components/ScorePanel'
 import { useTheme } from './hooks/useTheme'
@@ -196,7 +198,8 @@ function Feature({ icon, title, body }: { icon: React.ReactNode; title: string; 
 
 function Results({ result, onReset }: { result: AnalysisResult; onReset: () => void }) {
   const { analysis, preview } = result
-  const [tab, setTab] = useState<'score' | 'compare'>('score')
+  const [tab, setTab] = useState<'score' | 'fix' | 'compare'>('score')
+  const canEdit = analysis.stats.words > 0
   const [mode, setMode] = useState<Mode>(() => {
     try {
       return localStorage.getItem('ats-lens-mode') === 'fresher' ? 'fresher' : 'experienced'
@@ -243,6 +246,17 @@ function Results({ result, onReset }: { result: AnalysisResult; onReset: () => v
               type="button"
               role="tab"
               className="panel__tab"
+              aria-selected={tab === 'fix'}
+              onClick={() => setTab('fix')}
+              disabled={!canEdit}
+              title={canEdit ? undefined : 'Nothing to edit: the file has no readable text'}
+            >
+              <PenLine size={14} aria-hidden="true" /> Fix & download
+            </button>
+            <button
+              type="button"
+              role="tab"
+              className="panel__tab"
               aria-selected={tab === 'compare'}
               onClick={() => setTab('compare')}
             >
@@ -265,7 +279,14 @@ function Results({ result, onReset }: { result: AnalysisResult; onReset: () => v
       ) : null}
 
       {tab === 'score' ? (
-        <ScorePanel analysis={analysis} mode={mode} onModeChange={changeMode} />
+        <ScorePanel
+          analysis={analysis}
+          mode={mode}
+          onModeChange={changeMode}
+          onFix={canEdit ? () => setTab('fix') : undefined}
+        />
+      ) : tab === 'fix' ? (
+        <Editor analysis={analysis} mode={mode} onModeChange={changeMode} />
       ) : (
         <div className="panels">
           <OriginalPanel preview={preview} fileName={analysis.fileName} />

@@ -5,7 +5,9 @@ import {
   CircleHelp,
   Info,
   ListChecks,
+  PenLine,
   Sparkles,
+  Wand2,
 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import {
@@ -18,14 +20,17 @@ import {
   type Mode,
 } from '../lib/scoring'
 import type { Analysis } from '../lib/types'
+import { FIXES, ISSUE_TO_FIX } from '../lib/editor/fixes'
 
 interface Props {
   analysis: Analysis
   mode: Mode
   onModeChange: (mode: Mode) => void
+  /** When provided, issue cards get a "Fix it" button that jumps to the editor. */
+  onFix?: () => void
 }
 
-export function ScorePanel({ analysis, mode, onModeChange }: Props) {
+export function ScorePanel({ analysis, mode, onModeChange, onFix }: Props) {
   const report = useMemo(() => scoreResume(analysis, mode), [analysis, mode])
   const band = scoreBand(report.overall)
   const issueCount = report.categories.reduce((n, c) => n + c.issues.length, 0)
@@ -104,9 +109,12 @@ export function ScorePanel({ analysis, mode, onModeChange }: Props) {
                     <SeverityPill severity={issue.severity} uncertain={issue.uncertain} />
                   </div>
                   <p className="topfixes__fix">{issue.fix}</p>
-                  <span className="topfixes__cat">
-                    {CATEGORY_META[issue.category].label} · about +{formatImpact(issue.impact)}{' '}
-                    points
+                  <span className="topfixes__foot">
+                    <span className="topfixes__cat">
+                      {CATEGORY_META[issue.category].label} · about +{formatImpact(issue.impact)}{' '}
+                      points
+                    </span>
+                    <FixButton issue={issue} onFix={onFix} />
                   </span>
                 </div>
               </li>
@@ -127,7 +135,7 @@ export function ScorePanel({ analysis, mode, onModeChange }: Props) {
         </h3>
         <div className="categories__grid">
           {report.categories.map((c) => (
-            <CategoryCard key={c.id} category={c} />
+            <CategoryCard key={c.id} category={c} onFix={onFix} />
           ))}
         </div>
       </div>
@@ -213,7 +221,7 @@ function SeverityPill({
   )
 }
 
-function CategoryCard({ category }: { category: CategoryScore }) {
+function CategoryCard({ category, onFix }: { category: CategoryScore; onFix?: () => void }) {
   const [open, setOpen] = useState(false)
   const meta = CATEGORY_META[category.id]
   const tone = category.notAssessed
@@ -285,7 +293,7 @@ function CategoryCard({ category }: { category: CategoryScore }) {
         ) : category.issues.length ? (
           <div className="issues">
             {category.issues.map((issue) => (
-              <IssueCard key={issue.id} issue={issue} />
+              <IssueCard key={issue.id} issue={issue} onFix={onFix} />
             ))}
           </div>
         ) : category.score < 100 ? (
@@ -301,12 +309,63 @@ function CategoryCard({ category }: { category: CategoryScore }) {
   )
 }
 
-function IssueCard({ issue }: { issue: Issue }) {
+function FixButton({ issue, onFix }: { issue: Issue; onFix?: () => void }) {
+  if (!onFix) return null
+  const fix = ISSUE_TO_FIX[issue.id]
+  const isVerb = issue.id === 'weak-openers' || issue.id === 'few-action-verbs'
+  const isAiCandidate = issue.id === 'few-numbers' || issue.id === 'vague-claims'
+  if (fix) {
+    return (
+      <button
+        type="button"
+        className="btn btn--sm btn--primary"
+        onClick={onFix}
+        title={FIXES[fix].description}
+      >
+        <Wand2 size={13} /> Fix it
+      </button>
+    )
+  }
+  if (isVerb) {
+    return (
+      <button
+        type="button"
+        className="btn btn--sm"
+        onClick={onFix}
+        title="Pick stronger verbs in the editor"
+      >
+        <PenLine size={13} /> Pick stronger verbs
+      </button>
+    )
+  }
+  if (isAiCandidate) {
+    return (
+      <button
+        type="button"
+        className="btn btn--sm"
+        onClick={onFix}
+        title="Open the editor; add numbers yourself or ask AI for a rewrite with placeholders"
+      >
+        <PenLine size={13} /> Edit bullets
+      </button>
+    )
+  }
+  return (
+    <button type="button" className="btn btn--sm btn--ghost" onClick={onFix}>
+      <PenLine size={13} /> Open editor
+    </button>
+  )
+}
+
+function IssueCard({ issue, onFix }: { issue: Issue; onFix?: () => void }) {
   return (
     <article className={`issue issue--${issue.severity}`}>
       <header className="issue__head">
         <h4 className="issue__title">{issue.title}</h4>
-        <SeverityPill severity={issue.severity} uncertain={issue.uncertain} />
+        <span className="issue__head-right">
+          <SeverityPill severity={issue.severity} uncertain={issue.uncertain} />
+          <FixButton issue={issue} onFix={onFix} />
+        </span>
       </header>
       <dl className="issue__grid">
         <div>
